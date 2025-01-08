@@ -47,7 +47,8 @@ public class ApplicationContext {
 
         Class<?> targetClass = files.getFirst().getDeclaringClass();
         T instance = (T) targetClass.getDeclaredConstructors()[0].newInstance();
-        context.put(beanName, instance);
+        String fullDirName = targetClass.getName()+"."+files.getFirst().getName();
+        context.put(fullDirName, instance);
         return (T) files.getFirst().invoke(instance, instancedParameters.toArray());
     }
 
@@ -59,6 +60,14 @@ public class ApplicationContext {
        return null;
     }
 
+    /**
+     * @param beanName
+     * @return T
+     * @apiNote 빈 생성 순서 : 객체 > 의존 객체 > 빈 객체 > 의존 빈 객체 순서입니다
+     * 내부적으로 빈 이름 저장 방법 : 객체 : package + className, 빈 메서드 package + className + methodName
+     * 모든 className은 대문자로 시작하며, 모든 methodname은 소문자로 시작합니다
+     * 만약 객체를 소문자로 찾으려 한다면 앞의 첫 글자를 자동으로 대문자로 반환합니다
+     */
     public <T> T genBean(String beanName) {
         if (getBean(beanName) != null) { return getBean(beanName); }
         String UpperBeanName =  beanName.substring(0,1).toUpperCase() + beanName.substring(1);
