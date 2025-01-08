@@ -52,17 +52,16 @@ public class ApplicationContext {
     }
 
     private <T> T getBean(String beanName) {
-       for (String key : context.keySet())  {
-           if (key.contains(beanName)) return (T) context.get(key);
+        String UpperBeanName =  beanName.substring(0,1).toUpperCase() + beanName.substring(1);
+        for (String key : context.keySet())  {
+           if (key.contains(beanName) || key.contains(UpperBeanName)) return (T) context.get(key);
        }
        return null;
     }
 
     public <T> T genBean(String beanName) {
+        if (getBean(beanName) != null) { return getBean(beanName); }
         String UpperBeanName =  beanName.substring(0,1).toUpperCase() + beanName.substring(1);
-
-        if (getBean(UpperBeanName) != null) { return getBean(UpperBeanName); }
-
 
         Reflections reflectionsAll = new Reflections(basePackage, Scanners.TypesAnnotated); // your.root.package 하위의 모든 패키지 스캔
         Set<Class<?>> annotatedClassesAll = reflectionsAll.getTypesAnnotatedWith(Component.class);
