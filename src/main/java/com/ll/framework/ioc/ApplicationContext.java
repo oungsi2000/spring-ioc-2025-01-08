@@ -47,12 +47,22 @@ public class ApplicationContext {
 
         Class<?> targetClass = files.getFirst().getDeclaringClass();
         T instance = (T) targetClass.getDeclaredConstructors()[0].newInstance();
+        context.put(beanName, instance);
         return (T) files.getFirst().invoke(instance, instancedParameters.toArray());
     }
 
+    private <T> T getBean(String beanName) {
+       for (String key : context.keySet())  {
+           if (key.contains(beanName)) return (T) context.get(key);
+       }
+       return null;
+    }
+
     public <T> T genBean(String beanName) {
-        if (context.get(beanName) != null) { return (T) context.get(beanName); }
-        String fullDirName =  beanName.substring(0,1).toUpperCase() + beanName.substring(1);
+        String UpperBeanName =  beanName.substring(0,1).toUpperCase() + beanName.substring(1);
+
+        if (getBean(UpperBeanName) != null) { return getBean(UpperBeanName); }
+
 
         Reflections reflectionsAll = new Reflections(basePackage, Scanners.TypesAnnotated); // your.root.package 하위의 모든 패키지 스캔
         Set<Class<?>> annotatedClassesAll = reflectionsAll.getTypesAnnotatedWith(Component.class);
@@ -62,14 +72,13 @@ public class ApplicationContext {
             //TODO beanName 과 일치하는 경로를 동적으로 찾는 부분을 메서드 분리
             files = annotatedClassesAll.stream()
                 .map(Class::getName)
-                .filter(name -> name.contains(fullDirName))
+                .filter(name -> name.contains(UpperBeanName) || name.contains(beanName))
                 .toList();
 
             //만약 의존 객체를 프로젝트 디렉토리에서 찾을 수 없다면 BaseCreateExcpetion 처리
             if (files.isEmpty())  {
                 return genBeanByInvocation(beanName);
             }
-
             //해당 이름과 일치하는 첫 번째 클래스 생성
             Class<T> bean = (Class<T>) Class.forName(files.getFirst());
             Constructor<T> constructor = (Constructor<T>) bean.getConstructors()[0];
@@ -79,15 +88,12 @@ public class ApplicationContext {
 
             //재귀적으로 필요한 인자를 동적으로 생성
             for (Class parameter : parameters) {
-                String[] parts = parameter.getName().split("\\.");
-                String parameterName = parts[parts.length - 1].split(" ")[0];
-                String firstLetter = parameterName.substring(0,1).toLowerCase();
-                T instance = genBean(firstLetter + parameterName.substring(1));
+                T instance = genBean(parameter.getName());
                 instancedParameters.add(instance);
             }
 
             T instance = constructor.newInstance(instancedParameters.toArray());
-            context.put(beanName, instance);
+            context.put(files.getFirst(), instance);
             return instance;
 
         } catch (CannotCreateException e){
