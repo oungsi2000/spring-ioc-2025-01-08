@@ -9,6 +9,7 @@ import org.reflections.util.ClasspathHelper;
 import org.reflections.util.ConfigurationBuilder;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.*;
@@ -16,25 +17,28 @@ import java.util.*;
 public class ApplicationContext {
     private final Map<String, Object> context = new HashMap<>();
     private final String basePackage;
-    private final String baseUri = "./src/test/java";
+    private Set<Class<?>> annotatedClassesAll;
+    private Set<Method> annotatedMethodsAll;
 
     public ApplicationContext(String basePackage) {
         this.basePackage = basePackage;
     }
 
     public void init() {
+        Reflections reflectionsAll = new Reflections(basePackage, Scanners.TypesAnnotated, Scanners.MethodsAnnotated, Scanners.MethodsReturn); // your.root.package 하위의 모든 패키지 스캔
+        this.annotatedClassesAll = reflectionsAll.getTypesAnnotatedWith(Component.class);
+        this.annotatedMethodsAll = reflectionsAll.getMethodsAnnotatedWith(Bean.class);
+        genAll();
     }
 
-
     private <T> T genBeanByInvocation(String beanName) throws Exception {
-        Reflections reflectionsAll = new Reflections(basePackage, Scanners.MethodsAnnotated, Scanners.MethodsReturn); // your.root.package 하위의 모든 패키지 스캔
-        Set<Method> annotatedMethodsAll = reflectionsAll.getMethodsAnnotatedWith(Bean.class);
-
+        // your.root.package 하위의 모든 패키지 스캔
         List<Method> files;
         files = annotatedMethodsAll.stream()
             .filter(name -> name.getName().contains(beanName))
             .toList();
         if (files.isEmpty()) {
+            Reflections reflectionsAll = new Reflections(basePackage, Scanners.MethodsReturn);
             files = reflectionsAll.getMethodsReturn(Class.forName(beanName)).stream().toList();
             if (files.isEmpty()) throw new CannotCreateException("bean " + beanName + " 를 찾을 수 없습니다");
         }
@@ -48,8 +52,9 @@ public class ApplicationContext {
         Class<?> targetClass = files.getFirst().getDeclaringClass();
         T instance = (T) targetClass.getDeclaredConstructors()[0].newInstance();
         String fullDirName = targetClass.getName()+"."+files.getFirst().getName();
-        context.put(fullDirName, instance);
-        return (T) files.getFirst().invoke(instance, instancedParameters.toArray());
+        T beanInstance = (T) files.getFirst().invoke(instance, instancedParameters.toArray());
+        context.put(fullDirName, beanInstance);
+        return (T) beanInstance;
     }
 
     private <T> T getBean(String beanName) {
@@ -71,10 +76,6 @@ public class ApplicationContext {
     public <T> T genBean(String beanName) {
         if (getBean(beanName) != null) { return getBean(beanName); }
         String UpperBeanName =  beanName.substring(0,1).toUpperCase() + beanName.substring(1);
-
-        Reflections reflectionsAll = new Reflections(basePackage, Scanners.TypesAnnotated); // your.root.package 하위의 모든 패키지 스캔
-        Set<Class<?>> annotatedClassesAll = reflectionsAll.getTypesAnnotatedWith(Component.class);
-
         try {
             List<String> files;
             //TODO beanName 과 일치하는 경로를 동적으로 찾는 부분을 메서드 분리
@@ -110,5 +111,14 @@ public class ApplicationContext {
         } catch (Exception e) {
             return (T) null;
         }
+    }
+
+    private <T> void genAll() {
+        annotatedClassesAll.forEach(
+            annotatedClass-> genBean(annotatedClass.getName())
+            );
+        annotatedMethodsAll.forEach(
+            annotatedMethod->genBean(annotatedMethod.getName())
+        );
     }
 }
